@@ -1,10 +1,11 @@
+from django.contrib.auth import authenticate
 from django.shortcuts import render, redirect
 
-from register.reg.form import SignUpForm
+from .form import SignUpForm
 
 
 def homepage(request):
-    pass
+    return render(request, 'reg/index.html')
 
 
 def register(request):
@@ -12,15 +13,29 @@ def register(request):
         form = SignUpForm(request.POST)
         if form.is_valid():
             form.save()
-            return redirect('login')  # Redirect to login page after successful registration
+            return redirect('login')
     else:
         form = SignUpForm()
-    return render(request, 'registration/register.html', {'form': form})
+    return render(request, 'reg/register.html', {'form': form})
 
 
 def login(request):
-    pass
+    global username
+    if request.method == 'POST':
+        username = request.POST['username']
+    password = request.POST['password']
+    user = authenticate(request, username=username, password=password)
+    if user is not None:
+        login(request, user)
+        return redirect('dashboard')
+    return render(request, 'reg/login.html')
 
 
 def dashboard(request):
-    pass
+    if request.user.is_authenticated:
+        return render(request, 'reg/dashboard.html')
+    else:
+        return redirect('login')
+
+
+
