@@ -1,6 +1,7 @@
 from django.test import TestCase, Client
 from django.urls import reverse
 from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
 from ..form import SignUpForm
 
 
@@ -14,15 +15,22 @@ class TestViews(TestCase):
         self.dashboard_url = reverse('dashboard')
         self.user = User.objects.create_user(username='testuser', password='12345')
 
+    def get_tokens_for_user(self, user):
+        refresh = RefreshToken.for_user(user)
+        token = refresh.token
+        return {
+            'refresh': str(refresh),
+            'access': str(token),
+        }
+
     def test_homepage_view(self):
         response = self.client.get(self.homepage_url)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'reg/index.html')
+        self.assertEqual(response.json(), {'message': 'Welcome to the homepage!'})
 
     def test_register_view_GET(self):
         response = self.client.get(self.register_url)
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'reg/register.html')
+        self.assertEqual(response.status_code, 405)  # Method Not Allowed
 
     def test_register_view_POST(self):
         response = self.client.post(self.register_url, {
@@ -30,37 +38,35 @@ class TestViews(TestCase):
             'password1': 'newpassword',
             'password2': 'newpassword'
         })
-        self.assertEqual(response.status_code, 302)
-        self.assertRedirects(response, reverse('login'))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {'message': 'User created successfully.'})
 
     def test_login_view_GET(self):
         response = self.client.get(self.login_url)
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'reg/login.html')
+        self.assertEqual(response.status_code, 405)  # Method Not Allowed
 
     def test_login_view_POST(self):
         response = self.client.post(self.login_url, {
             'username': 'testuser',
             'password': '12345'
         })
-        self.assertEqual(response.status_code, 302)
-        self.assertRedirects(response, reverse('dashboard'))
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('tokens', response.json())
 
     def test_login_view_POST_invalid_credentials(self):
         response = self.client.post(self.login_url, {
             'username': 'invaliduser',
             'password': 'invalidpassword'
         })
-        self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'reg/login.html')
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {'error': 'Invalid credentials.'})
 
     def test_dashboard_view_authenticated(self):
         self.client.login(username='testuser', password='12345')
         response = self.client.get(self.dashboard_url)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'reg/dashboard.html')
+        self.assertEqual(response.json(), {'message': 'Dashboard'})
 
     def test_dashboard_view_not_authenticated(self):
         response = self.client.get(self.dashboard_url)
-        self.assertEqual(response.status_code, 302)
-        self.assertRedirects(response, '{}?next={}'.format(reverse('login'), self.dashboard_url))
+        self.assertEqual(response.status_code, 401)  # Unauthorized
