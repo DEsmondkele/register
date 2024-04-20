@@ -5,8 +5,10 @@ from django.shortcuts import render, redirect
 from django.contrib.auth import login
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework_simplejwt.tokens import RefreshToken
+import bcrypt
 
 from .form import SignUpForm
+from .models import CustomUser
 
 
 @csrf_exempt
@@ -28,7 +30,11 @@ def register(request):
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
-            form.save()
+            username = form.cleaned_data.get('username')
+            email = form.cleaned_data.get('email')
+            password = form.cleaned_data.get('password')
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            CustomUser.objects.create_user(username=username, email=email, password=hashed_password)
             return JsonResponse({'message': 'User created successfully.'})
     else:
         form = SignUpForm()
