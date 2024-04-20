@@ -1,26 +1,47 @@
 from django.contrib.auth import authenticate
 from django.contrib.auth.decorators import login_required
+from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.contrib.auth import login
+from django.views.decorators.csrf import csrf_exempt
+from rest_framework_simplejwt.tokens import RefreshToken
+import bcrypt
 
 from .form import SignUpForm
+from .models import CustomUser
+
+
+@csrf_exempt
+def get_tokens_for_user(user):
+    refresh = RefreshToken.for_user(user)
+    token = refresh.token
+    return {
+        'refresh': str(refresh),
+        'access': str(token),
+    }
 
 
 def homepage(request):
     return render(request, 'reg/index.html')
 
 
+@csrf_exempt
 def register(request):
     if request.method == 'POST':
         form = SignUpForm(request.POST)
         if form.is_valid():
-            form.save()
-            return redirect('login')
+            username = form.cleaned_data.get('username')
+            email = form.cleaned_data.get('email')
+            password = form.cleaned_data.get('password')
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+            CustomUser.objects.create_user(username=username, email=email, password=hashed_password)
+            return JsonResponse({'message': 'User created successfully.'})
     else:
         form = SignUpForm()
-    return render(request, 'reg/register.html', {'form': form})
+    return JsonResponse({'message': 'Registration unsuccessful.'})
 
 
+@csrf_exempt
 def user_login(request):
     if request.method == 'POST':
         username = request.POST['username']
@@ -28,13 +49,12 @@ def user_login(request):
         user = authenticate(request, username=username, password=password)
         if user is not None:
             login(request, user)
-            return redirect('dashboard')
-    return render(request, 'reg/login.html')
+            tokens = get_tokens_for_user(user)
+            return JsonResponse({'tokens': tokens})
+    return JsonResponse({'error': 'Invalid credentials.'}, status=400)
 
 
-@login_required
+@csrf_exempt
 def dashboard(request):
-    if request.user.is_authenticated:
-        return render(request, 'reg/dashboard.html')
-    else:
-        return redirect('login')
+    if request.method == 'GET':
+        return JsonResponse({'message': 'Dashboard'})
